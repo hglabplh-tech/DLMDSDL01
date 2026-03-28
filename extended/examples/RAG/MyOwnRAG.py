@@ -2,19 +2,11 @@
 # 
 # %%
 import kagglehub
-#from AskByRAG import get_dbpath, set_api_env_and_keys
 from pathlib import Path
 from pypdf import PdfReader
-#from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_text_splitters import CharacterTextSplitter
-from langchain_aws import BedrockEmbeddings
-from langchain_ollama import OllamaEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
 import os
-#import faiss
-#from langchain_community.docstore.in_memory import InMemoryDocstore
-#from langchain_community.vectorstores import FAISS
 from langchain_core.embeddings import DeterministicFakeEmbedding
 
 dataset_of_pdf_files_path = kagglehub.dataset_download('manisha717/dataset-of-pdf-files')
@@ -72,7 +64,7 @@ def build_vectors(complete_content):
     vector_db = Chroma.from_documents(chunks, embedding=embeddings, persist_directory=get_dbpath())
     return vector_db
 # %% [markdown]
-# 
+
 # %%
 def extract_text_from_pdf(file_path):
     # creating a pdf reader object

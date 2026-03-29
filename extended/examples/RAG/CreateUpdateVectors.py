@@ -99,6 +99,12 @@ def read_all_docs(data_paths):
                 return -1, docs_string
     return 0, [docs_string]
 
+def update_vectors(complete_content):
+    splitter = CharacterTextSplitter()
+    chunks = splitter.create_documents(complete_content)
+    embeddings = DeterministicFakeEmbedding(size=8192)
+    vector_db = Chroma.add_documents(chunks)
+    return vector_db
 # %% [markdown]
 # 
 # %%
@@ -111,7 +117,11 @@ if __name__ == '__main__':
         print(complete_content[0])
         print(f"Count of docs: {len(complete_content)}")
         print("build vector")
-        vector_db = build_vectors(complete_content)
+        mode = input("Select mode create / update: ")
+        if mode == 'create':
+            vector_db = build_vectors(complete_content)
+        else:
+            vector_db = update_vectors(complete_content)
         print('ready')
 # %% [markdown]
 # 

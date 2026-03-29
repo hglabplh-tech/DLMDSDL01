@@ -1,3 +1,5 @@
+import time
+
 from langchain_chroma import Chroma
 import os
 from pathlib import Path
@@ -6,8 +8,8 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 #from langchain.agents import create_agent
 from langchain.tools import tool
 from langchain.chat_models import init_chat_model
-from langchain_community.llms import Ollama
-from langchain.chains import RetrievalQA
+from langchain_ollama import OllamaLLM
+from langchain_classic.chains import RetrievalQA
 
 def get_app_key():
     fname = 'app_keyid.sec'
@@ -90,25 +92,26 @@ def queryCompileLocal(vector_db, query):
         search_kwargs={"k": 3, "lambda_mult": 0.5}
     )
     # 2. Connect to local LLM (Ollama)
-    llm = Ollama(model="llama3")
+    llm = OllamaLLM(model="qwen3")
     # 3. Create the chat/query chain
-    qa_chain = RetrievalQA.from_llm(llm=llm, retriever=vector_db.as_retriever())
+    qa_chain = RetrievalQA.from_chain(llm=llm, chain_type="map_rerank", verbose=True, retriever=retriever)
     # 4. Query your data
+    print(f"Start query at: {time.time()}")
     docs = qa_chain.invoke(query)
-
+    print(f"Finish query at: {time.time()}")
     return answer, docs
 
 
 if __name__ == '__main__':
     index = 0
-    mode = input("Query Mode :")
+    mode = input("Query Mode (openai/local) : ")
     if mode == "openai":
         set_api_env_and_keys(mode)
     vector_db = get_vector_db()
-    query = input(f"Prompt({index}) :")
+    query = input(f"Prompt({index}) : ")
     while  query != 'exit':
         if mode != 'openai' and mode != 'local':
-            print(f'Invalid mode :{mode} ')
+            print(f'Invalid mode (modes : local / openai):{mode} ')
         if mode == "openai":
             answer, docs = queryCompile(vector_db, query)
         if mode == "local":
@@ -118,4 +121,4 @@ if __name__ == '__main__':
         print(docs)
        # printout_retrieved_docs(docs)
         index = index + 1
-        query = input(f"Next Prompt({index}) :")
+        query = input(f"Next Prompt({index}) : ")

@@ -84,7 +84,7 @@ def extract_text_from_pdf(file_path):
 # %%
 def read_all_docs(data_paths):
     #absolute_path = data_path + '/Pdf'
-    docs_string = ''
+    docs_array = []
     for data_path in data_paths:
         filenames = os.listdir(data_path)
         for filename in filenames:
@@ -92,18 +92,18 @@ def read_all_docs(data_paths):
             print(f"Processing {file_path}")
             try:
                 text = extract_text_from_pdf(file_path)
-                docs_string += text
+                docs_array.append(text)
             except Exception as e:
                 print(f"Error on {filename}: {e}")
-                docs_string += "Failed"
-                return -1, docs_string
-    return 0, [docs_string]
+                return -1, []
+    return 0, docs_array
 
 def update_vectors(complete_content):
     splitter = CharacterTextSplitter()
-    chunks = splitter.create_documents(complete_content)
     embeddings = DeterministicFakeEmbedding(size=8192)
-    vector_db = Chroma.add_documents(chunks)
+    chunks = splitter.create_documents(complete_content)
+    vector_db = Chroma(persist_directory=get_dbpath(), embedding_function=embeddings)
+    Chroma.from_documents(chunks, embedding=embeddings, persist_directory=get_dbpath())
     return vector_db
 # %% [markdown]
 # 
@@ -112,17 +112,26 @@ def update_vectors(complete_content):
 if __name__ == '__main__':
     set_api_env_and_keys()
     absolute_path = dataset_of_pdf_files_path + '/Pdf'
-    ret_code, complete_content = read_all_docs(['/Users/hglabplhak/pdfdb', '/Users/hglabplhak/pdfprivdb'])
-    if ret_code == 0:
+
+
+
+
+    print("build vector")
+    mode = input("Select mode create / update: ")
+    if mode == 'create':
+        ret_code, complete_content = read_all_docs(['/Users/hglabplhak/pdfdb']) #, '/Users/hglabplhak/pdfprivdb', '/Users/hglabplhak/persons'])
         print(complete_content[0])
         print(f"Count of docs: {len(complete_content)}")
         print("build vector")
-        mode = input("Select mode create / update: ")
-        if mode == 'create':
-            vector_db = build_vectors(complete_content)
-        else:
-            vector_db = update_vectors(complete_content)
-        print('ready')
+        vector_db = build_vectors(complete_content)
+    if mode == 'update':
+        #have to rewrite this
+        ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/persons'])
+        print(complete_content2[0])
+        print(f"Count of docs: {len(complete_content2)}")
+        print("build vector")
+        vector_db = update_vectors(complete_content2)
+    print('ready')
 # %% [markdown]
 # 
 # %%

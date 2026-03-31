@@ -1,5 +1,5 @@
 import time
-
+import json
 from langchain_chroma import Chroma
 import os
 from pathlib import Path
@@ -8,8 +8,12 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 #from langchain.agents import create_agent
 from langchain.tools import tool
 from langchain.chat_models import init_chat_model
+from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
+from langchain_classic.chains import LLMChain, SimpleSequentialChain
 from langchain_classic.chains import RetrievalQA
+from langchain_core.output_parsers import StrOutputParser
+from langchain_classic.chains import create_retrieval_chain
 
 def get_app_key():
     fname = 'app_keyid.sec'
@@ -42,13 +46,18 @@ def get_vector_db():
 
 def printout_results(answer):
     for doc, score in answer:
-        print(f"Score: {score},Content: doc.page_content, Metadata: {doc.metadata}")
+        print(f"Score: {score},Metadata: {doc.metadata}")
 
 def printout_retrieved_docs(docs):
     for doc in docs:
         print(f"Retrieved Document: {doc.page_content}")
 
-
+def print_answer(retrieved_docs):
+    cooked = json.loads(retrieved_docs)
+    print("Question: ->")
+    print(cooked["query"])
+    print("Result: ->")
+    print(cooked['result'])
 
 @tool(response_format="content_and_artifact")
 def retrieve_context(query: str):
@@ -94,13 +103,21 @@ def queryCompileLocal(vector_db, query):
     # 2. Connect to local LLM (Ollama)
     llm = OllamaLLM(model="qwen3")
     # 3. Create the chat/query chain
-    qa_chain = RetrievalQA.from_chain(llm=llm, chain_type="map_rerank", verbose=True, retriever=retriever)
+    qaChain = RetrievalQA.from_llm(llm=llm, retriever=retriever)
+    chain = qaChain | StrOutputParser()
     # 4. Query your data
     print(f"Start query at: {time.time()}")
-    docs = qa_chain.invoke(query)
+    docs = chain.invoke(query)
     print(f"Finish query at: {time.time()}")
     return answer, docs
 
+
+
+def inputPrompt(prompt, index):
+    area = input(f"Area({index}) : ")
+    query = input(f"{prompt}({index}) : ")
+    prompt  = area + " : " + query
+    return prompt, query
 
 if __name__ == '__main__':
     index = 0
@@ -108,17 +125,18 @@ if __name__ == '__main__':
     if mode == "openai":
         set_api_env_and_keys(mode)
     vector_db = get_vector_db()
-    query = input(f"Prompt({index}) : ")
+
+    prompt, query = inputPrompt('Prompt', index)
     while  query != 'exit':
         if mode != 'openai' and mode != 'local':
             print(f'Invalid mode (modes : local / openai):{mode} ')
         if mode == "openai":
-            answer, docs = queryCompile(vector_db, query)
+            answer, docs = queryCompile(vector_db, prompt)
         if mode == "local":
-            answer, docs = queryCompileLocal(vector_db, query)
+            answer, docs = queryCompileLocal(vector_db, prompt)
 
         printout_results(answer)
-        print(docs)
+        print_answer(docs)
        # printout_retrieved_docs(docs)
         index = index + 1
-        query = input(f"Next Prompt({index}) : ")
+        prommpt, query = inputPrompt('Next Prompt', index)

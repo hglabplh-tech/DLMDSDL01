@@ -1,4 +1,5 @@
 import time
+import datetime
 import json
 from langchain_chroma import Chroma
 import os
@@ -9,7 +10,8 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from langchain.tools import tool
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import PromptTemplate
-from langchain_ollama import OllamaLLM
+from langchain_community.vectorstores import SKLearnVectorStore
+from langchain_ollama import OllamaLLM, OllamaEmbeddings, ChatOllama
 from langchain_classic.chains import LLMChain, SimpleSequentialChain
 from langchain_classic.chains import RetrievalQA
 from langchain_core.output_parsers import StrOutputParser
@@ -39,9 +41,12 @@ def get_dbpath():
     return db_path
 
 def get_vector_db():
-    embeddings = DeterministicFakeEmbedding(size=8192)
+    embeddings = DeterministicFakeEmbedding(size=4096)
+    #embeddings = DeterministicFakeEmbedding(size=1024)
     #embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vector_db = Chroma(persist_directory=get_dbpath(), embedding_function=embeddings)
+    vector_db = SKLearnVectorStore(embedding=embeddings,
+                                   persist_path=get_dbpath(),
+                                   serializer="parquet")
     return vector_db
 
 def printout_results(answer):
@@ -52,12 +57,11 @@ def printout_retrieved_docs(docs):
     for doc in docs:
         print(f"Retrieved Document: {doc.page_content}")
 
-def print_answer(retrieved_docs):
-    cooked = json.loads(retrieved_docs)
-    print("Question: ->")
-    print(cooked["query"])
-    print("Result: ->")
-    print(cooked['result'])
+def print_answer(result):
+    print(result)
+    parser = StrOutputParser()
+    cooked = parser.invoke(result)
+    print(cooked)
 
 @tool(response_format="content_and_artifact")
 def retrieve_context(query: str):
@@ -76,7 +80,7 @@ def queryCompile(vector_db, query):
         search_kwargs={"k": 3, "lambda_mult": 0.5}
     )
    # client = vector_db._client
-    #embeddings = DeterministicFakeEmbedding(size=8192)
+    #embeddings = DeterministicFakeEmbedding(size=1024)
     tools = [retrieve_context]
     # If desired, specify custom instructions
     prompt = (query)
@@ -94,6 +98,9 @@ def queryCompile(vector_db, query):
 
     return answer, docs
 
+def actual_time():
+    return datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+
 def queryCompileLocal(vector_db, query):
     answer = vector_db.similarity_search_with_score(query, k=2)
     retriever = vector_db.as_retriever(
@@ -101,22 +108,24 @@ def queryCompileLocal(vector_db, query):
         search_kwargs={"k": 3, "lambda_mult": 0.5}
     )
     # 2. Connect to local LLM (Ollama)
-    llm = OllamaLLM(model="qwen3")
-    # 3. Create the chat/query chain
-    qaChain = RetrievalQA.from_llm(llm=llm, retriever=retriever)
-    chain = qaChain | StrOutputParser()
-    # 4. Query your data
-    print(f"Start query at: {time.time()}")
-    docs = chain.invoke(query)
-    print(f"Finish query at: {time.time()}")
-    return answer, docs
+    llm = ChatOllama(model="llama3")
 
+    # 3. Create the chat/query chain
+    qaChain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
+    chain = qaChain | StrOutputParser() # see below invoke call
+    # 4. Query your data
+    print(f"Start query at: {actual_time()}")
+    docs = chain.invoke(query) # TODO: the chain thing does not work in cause of the parser have to write a own JSON parsing
+    #docs = qaChain.invoke(query) # was invoke before
+    print(f"Finish query at: {actual_time()}")
+    return answer, docs
 
 
 def inputPrompt(prompt, index):
     area = input(f"Area({index}) : ")
     query = input(f"{prompt}({index}) : ")
-    prompt  = area + " : " + query
+   # prompt  = area + ' ' +  query
+    prompt = query # temporarily
     return prompt, query
 
 if __name__ == '__main__':

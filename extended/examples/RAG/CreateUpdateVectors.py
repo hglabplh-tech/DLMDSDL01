@@ -4,6 +4,8 @@
 import kagglehub
 import os
 import uuid
+import bs4
+
 from pathlib import Path
 
 from lxml.etree import DocumentInvalid
@@ -12,6 +14,8 @@ from oauthlib.oauth2.rfc6749.endpoints import metadata
 from pypdf import PdfReader
 from langchain_chroma import Chroma
 from langchain_community.vectorstores import SKLearnVectorStore
+from langchain_community.document_loaders import PyPDFLoader, UnstructuredHTMLLoader, WebBaseLoader, TextLoader, UnstructuredMarkdownLoader, UnstructuredWordDocumentLoader
+from langchain_community.document_loaders.parsers import RapidOCRBlobParser
 from langchain_text_splitters import CharacterTextSplitter, RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_core.embeddings.fake import DeterministicFakeEmbedding
@@ -22,12 +26,12 @@ from langchain_ollama import OllamaEmbeddings
 from ChatClientOllama import actual_time
 from extended.examples.RAG.ChatClientOllama import get_dbpath
 
-CSIZE_CONST = 1800
+CSIZE_CONST = 4096
 
 
 def CHUNK_SIZE():
     chunk_size = CSIZE_CONST
-    chunk_overlap = ((CSIZE_CONST / 100) * 15)
+    chunk_overlap = ((CSIZE_CONST / 100) *  5)
     return chunk_size, chunk_overlap
 
 
@@ -36,7 +40,7 @@ def get_embedding(key: str):
         set_api_env_and_keys()
         return OpenAIEmbeddings()
     if key == 'ollama':
-        return OllamaEmbeddings(model="llama3")
+        return OllamaEmbeddings(model="llama3.1")
     elif key == 'huggingface':
         return HuggingFaceEmbeddings()
     else:
@@ -47,18 +51,6 @@ dataset_of_pdf_files_path = kagglehub.dataset_download('manisha717/dataset-of-pd
 print(f"The dataset is loaded to the path: {dataset_of_pdf_files_path}")
 
 
-# %% [markdown]
-# 
-# %%
-
-# %%
-
-
-# %% [markdown]
-# 
-# %% [markdown]
-# 
-# %%
 def get_app_key():
     fname = 'app_keyid.sec'
     with open(fname) as f:
@@ -72,6 +64,11 @@ def write_index_row(id, path):
         row = id + ',' + path
         csv.writelines([row])
 
+def read_lines(file_path):
+    with open(file_path, 'r') as infile:
+        lines = infile.readlines()
+        return lines
+
 
 def set_api_env_and_keys():
     app_key = get_app_key()
@@ -82,13 +79,6 @@ def set_api_env_and_keys():
     return
 
 
-def get_dbpath():
-    home = Path.home()
-    db_path = os.path.join(home, 'chroma_vectordb')
-    if not os.path.exists(db_path):
-        os.makedirs(db_path)
-    return db_path
-
 
 # %% [markdown]
 # 
@@ -96,13 +86,15 @@ def get_dbpath():
 def build_vectors(complete_content):
     # 2. Embed and Store in Vector DB (Chroma)
     chunk_size, chunk_overlap = CHUNK_SIZE()
-    splitter = CharacterTextSplitter(
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        add_start_index=True
+        chunk_overlap=chunk_overlap
     )
-    embeddings = get_embedding('fake')
-    chunks = splitter.create_documents(complete_content)
+    embeddings = get_embedding('openai')
+    print(f"The complete count of documents is: {len(complete_content)}")
+    print(f"The first element is : {complete_content[0]}")
+    chunks = splitter.split_documents(complete_content)
+    print(f"Split pages post into {len(chunks)} sub-documents.")
     vector_db = SKLearnVectorStore.from_documents(chunks, embedding=embeddings,
                                                   persist_path=get_dbpath(),
                                                   serializer="parquet")
@@ -111,25 +103,56 @@ def build_vectors(complete_content):
 
     return vector_db
 
+def extract_doc_from_web_html(url):
+    # Only keep post title, headers, and content from the full HTML.
+    bs4_strainer = bs4.SoupStrainer(class_=("post-title", "post-header", "post-content"))
+    loader = WebBaseLoader(
+        web_paths=(url),
+        bs_kwargs={"parse_only": bs4_strainer},
+    )
+    docs = loader.load()
+    return docs
 
-# %% [markdown]
+def extract_doc_from_html(file_path):
+    html_loader = UnstructuredHTMLLoader(file_path, mode='page')
+    docs = html_loader.load()
+    return docs
 
-# %%
-def extract_text_from_pdf(file_path):
+def extract_doc_from_text(file_path):
+    text_loader = TextLoader(file_path, mode='page')
+    docs = text_loader.load()
+    return docs
+
+def extract_doc_from_markdown(file_path):
+    md_loader = UnstructuredMarkdownLoader(file_path, mode='page')
+    docs = md_loader.load()
+    return docs
+
+def extract_doc_from_word(file_path):
+    docx_loader = UnstructuredWordDocumentLoader(file_path, mode='page')
+    docs = docx_loader.load()
+    return docs
+
+
+def extract_doc_from_pdf(file_path):
     # creating a pdf reader object
-    reader = PdfReader(file_path)
-    content = ''
+
+
+    loader = PyPDFLoader(
+        file_path,
+        mode="page",
+        #images_parser=RapidOCRBlobParser(),
+    )
+    documents = loader.load()
     # printing number of pages in pdf file
-    page_count = len(reader.pages)
+    page_count = len(documents)
     print(f'Number of pages: {page_count}')
     # getting a specific page from the pdf file
-    for index in range(page_count):
-        page = reader.pages[index]
-        text = page.extract_text()
-        content += text
-    return content
+    return documents
 
-
+def get_suffix(f, suffix: str):
+    _,ext = os.path.splitext(f)
+    return (ext == '.' + suffix)
 # %% [markdown]
 # 
 # %%
@@ -141,47 +164,60 @@ def read_all_docs(data_paths):
         for filename in filenames:
             content_path = os.path.join(data_path, filename)
             print(f"Collecting: {content_path}.... ")
-            text = extract_text_from_pdf(content_path)
-            content_array.append(text)
+            if get_suffix(content_path, 'pdf'):
+                documents = extract_doc_from_pdf(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'txt'):
+                documents = extract_doc_from_text(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'md'):
+                documents = extract_doc_from_markdown(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'docx'):
+                documents = extract_doc_from_word(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'html') or get_suffix(content_path, 'htm'):
+                documents = extract_doc_from_html(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'wbx'):
+                lines = read_lines(content_path)
+                for url in lines:
+                    documents = extract_doc_from_web_html(url)
+                    content_array = content_array + documents
+            else:
+                print(f"The {content_path} cannot pe processed.... go on with next entry")
     return 0, content_array
 
 
 def add_documents(complete_content):
-    embeddings = get_embedding('fake')
+    embeddings = get_embedding('openai')
     vector_db = SKLearnVectorStore(embedding=embeddings,
                                    persist_path=get_dbpath(),
                                    serializer="parquet")
-    splitter = CharacterTextSplitter(
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        add_start_index=True
+        chunk_overlap=chunk_overlap
     )
-    documents = []
-    ids = []
-    for content in complete_content:
-        chunks = splitter.split_text(content)
-        print(f"Content is added {chunks}")
-        doc = Document(page_content=content, metadata={})
-        documents.append(doc)
-        uu_id = uuid.uuid4()
-        print(f"The document ID: {uu_id}")
-        ids.append(f"{uu_id}")
 
-    vector_db.add_documents(documents=documents, ids=ids, embedding=embeddings)
+    print(f"The complete count of documents is: {len(complete_content)}")
+    print(f"The first element is : {complete_content[0]}")
+    chunks = splitter.split_documents(complete_content)
+    print(f"Split pages post into {len(chunks)} sub-documents.")
+
+    vector_db.add_documents(documents=chunks, embedding=embeddings)
     vector_db.persist()
     return vector_db
 
 
 def update_vectors(complete_content):
-    splitter = CharacterTextSplitter(
+    splitter =  RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         add_start_index=True
     )
     embeddings = get_embedding('openai')
     chunks = splitter.split_text(complete_content)
-    vector_db = Chroma(persist_directory=get_dbpath(), embedding_function=embeddings)
-    Chroma.from_documents(chunks, embedding=embeddings, persist_directory=get_dbpath())
+
     return vector_db
 
 

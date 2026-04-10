@@ -24,15 +24,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaEmbeddings
 
 from ChatClientOllama import actual_time
-from extended.examples.RAG.ChatClientOllama import get_dbpath
-
-CSIZE_CONST = 4096
-
-
-def CHUNK_SIZE():
-    chunk_size = CSIZE_CONST
-    chunk_overlap = ((CSIZE_CONST / 100) *  5)
-    return chunk_size, chunk_overlap
+from utilities.RAGUtils import build_vectors, get_dbpath, get_db_history_path, CHUNK_SIZE, add_documents
 
 
 def get_embedding(key: str):
@@ -83,25 +75,7 @@ def set_api_env_and_keys():
 # %% [markdown]
 # 
 # %%
-def build_vectors(complete_content):
-    # 2. Embed and Store in Vector DB (Chroma)
-    chunk_size, chunk_overlap = CHUNK_SIZE()
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap
-    )
-    embeddings = get_embedding('openai')
-    print(f"The complete count of documents is: {len(complete_content)}")
-    print(f"The first element is : {complete_content[0]}")
-    chunks = splitter.split_documents(complete_content)
-    print(f"Split pages post into {len(chunks)} sub-documents.")
-    vector_db = SKLearnVectorStore.from_documents(chunks, embedding=embeddings,
-                                                  persist_path=get_dbpath(),
-                                                  serializer="parquet")
-    vector_db.persist()
 
-
-    return vector_db
 
 def extract_doc_from_web_html(url):
     # Only keep post title, headers, and content from the full HTML.
@@ -114,22 +88,22 @@ def extract_doc_from_web_html(url):
     return docs
 
 def extract_doc_from_html(file_path):
-    html_loader = UnstructuredHTMLLoader(file_path, mode='page')
+    html_loader = UnstructuredHTMLLoader(file_path)
     docs = html_loader.load()
     return docs
 
 def extract_doc_from_text(file_path):
-    text_loader = TextLoader(file_path, mode='page')
+    text_loader = TextLoader(file_path)
     docs = text_loader.load()
     return docs
 
 def extract_doc_from_markdown(file_path):
-    md_loader = UnstructuredMarkdownLoader(file_path, mode='page')
+    md_loader = UnstructuredMarkdownLoader(file_path)
     docs = md_loader.load()
     return docs
 
 def extract_doc_from_word(file_path):
-    docx_loader = UnstructuredWordDocumentLoader(file_path, mode='page')
+    docx_loader = UnstructuredWordDocumentLoader(file_path)
     docs = docx_loader.load()
     return docs
 
@@ -189,27 +163,11 @@ def read_all_docs(data_paths):
     return 0, content_array
 
 
-def add_documents(complete_content):
-    embeddings = get_embedding('openai')
-    vector_db = SKLearnVectorStore(embedding=embeddings,
-                                   persist_path=get_dbpath(),
-                                   serializer="parquet")
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap
-    )
 
-    print(f"The complete count of documents is: {len(complete_content)}")
-    print(f"The first element is : {complete_content[0]}")
-    chunks = splitter.split_documents(complete_content)
-    print(f"Split pages post into {len(chunks)} sub-documents.")
-
-    vector_db.add_documents(documents=chunks, embedding=embeddings)
-    vector_db.persist()
-    return vector_db
 
 
 def update_vectors(complete_content):
+    chunk_size, chunk_overlap = CHUNK_SIZE()
     splitter =  RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
@@ -228,26 +186,31 @@ def update_vectors(complete_content):
 if __name__ == '__main__':
     set_api_env_and_keys()
     absolute_path = dataset_of_pdf_files_path + '/Pdf'
-    mode = input("Select mode create / add / update(**later**): ")
+    mode = input("Select mode create / createhist / add / addhist / update(**later**): ")
     print(f"start collecting pdf datas at {actual_time()}....")
     if mode == 'create':
         ret_code, complete_content = read_all_docs(
-            ['/Users/hglabplhak/pdfdb', '/Users/hglabplhak/pdfprivdb', '/Users/hglabplhak/persons'])
+            ['/Users/hglabplhak/collections/pdfdb', '/Users/hglabplhak/collections/persons'])
 
         print("build vector")
-        vector_db = build_vectors(complete_content)
-    if mode == 'add':
-        # have to rewrite this
-        ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/pdfadds'])
-        print(complete_content2[0])
-        print(f"Count of docs: {len(complete_content2)}")
-        chunk_size, chunk_overlap = CHUNK_SIZE()
-        print(f"build vector with chunk-size: {chunk_size} and chunk-overlap: {chunk_overlap}")
-        vector_db = add_documents(complete_content2)
-    print(f"ready at {actual_time()}")
-# %% [markdown]
-# 
-# %%
+        vector_db = build_vectors(complete_content, get_dbpath(), False)
+    elif mode == 'createhist':
+        ret_code, complete_content = read_all_docs(
+            ['/Users/hglabplhak/collections/history_edu'])
 
-# %% [markdown]
-#
+        print("build vector")
+        vector_db = build_vectors(complete_content, get_db_history_path(), False)
+    elif mode == 'add':
+        # have to rewrite this
+      #  ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/collections/pdfadds', '//Users/hglabplhak/collections/pdfprivdb',
+        #  '/Users/hglabplhak/collections/mixeddb'])
+        #ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/collections/pdfadds'])
+        #ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/collections/pdfprivdb'])
+        ret_code, complete_content = read_all_docs(['/Users/hglabplhak/collections/mixeddb'])
+        print(complete_content[0])
+        vector_db = add_documents(complete_content, get_dbpath(), False)
+    elif mode == 'addhist':
+        ret_code, complete_content = read_all_docs(['/Users/hglabplhak/collections/history_edu/wars'])
+        print(complete_content[0])
+        vector_db = add_documents(complete_content, get_db_history_path(), False)
+    print(f"ready at {actual_time()}")

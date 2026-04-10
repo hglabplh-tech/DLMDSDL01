@@ -43,6 +43,7 @@ def get_dbpath():
     return db_path
 
 def get_vector_db():
+    set_api_env_and_keys('openai')
     embeddings = OpenAIEmbeddings()
     #embeddings = DeterministicFakeEmbedding(size=4096)
     #embeddings = DeterministicFakeEmbedding(size=1024)

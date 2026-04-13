@@ -23,9 +23,9 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaEmbeddings
 
-from ChatClientOllama import actual_time
-from utilities.RAGUtils import build_vectors, get_dbpath, get_db_history_path, CHUNK_SIZE, add_documents
 
+from utilities.RAGUtils import build_vectors, get_dbpath, get_db_history_path, actual_time
+from utilities.RAGUtils import CHUNK_SIZE, add_documents, read_all_docs, read_lines
 
 def get_embedding(key: str):
     if key == 'openai':
@@ -77,90 +77,7 @@ def set_api_env_and_keys():
 # %%
 
 
-def extract_doc_from_web_html(url):
-    # Only keep post title, headers, and content from the full HTML.
-    bs4_strainer = bs4.SoupStrainer(class_=("post-title", "post-header", "post-content"))
-    loader = WebBaseLoader(
-        web_paths=(url),
-        bs_kwargs={"parse_only": bs4_strainer},
-    )
-    docs = loader.load()
-    return docs
 
-def extract_doc_from_html(file_path):
-    html_loader = UnstructuredHTMLLoader(file_path)
-    docs = html_loader.load()
-    return docs
-
-def extract_doc_from_text(file_path):
-    text_loader = TextLoader(file_path)
-    docs = text_loader.load()
-    return docs
-
-def extract_doc_from_markdown(file_path):
-    md_loader = UnstructuredMarkdownLoader(file_path)
-    docs = md_loader.load()
-    return docs
-
-def extract_doc_from_word(file_path):
-    docx_loader = UnstructuredWordDocumentLoader(file_path)
-    docs = docx_loader.load()
-    return docs
-
-
-def extract_doc_from_pdf(file_path):
-    # creating a pdf reader object
-
-
-    loader = PyPDFLoader(
-        file_path,
-        mode="page",
-        #images_parser=RapidOCRBlobParser(),
-    )
-    documents = loader.load()
-    # printing number of pages in pdf file
-    page_count = len(documents)
-    print(f'Number of pages: {page_count}')
-    # getting a specific page from the pdf file
-    return documents
-
-def get_suffix(f, suffix: str):
-    _,ext = os.path.splitext(f)
-    return (ext == '.' + suffix)
-# %% [markdown]
-# 
-# %%
-def read_all_docs(data_paths):
-    # absolute_path = data_path + '/Pdf'
-    content_array = []
-    for data_path in data_paths:
-        filenames = os.listdir(data_path)
-        for filename in filenames:
-            content_path = os.path.join(data_path, filename)
-            print(f"Collecting: {content_path}.... ")
-            if get_suffix(content_path, 'pdf'):
-                documents = extract_doc_from_pdf(content_path)
-                content_array = content_array + documents
-            elif get_suffix(content_path, 'txt'):
-                documents = extract_doc_from_text(content_path)
-                content_array = content_array + documents
-            elif get_suffix(content_path, 'md'):
-                documents = extract_doc_from_markdown(content_path)
-                content_array = content_array + documents
-            elif get_suffix(content_path, 'docx'):
-                documents = extract_doc_from_word(content_path)
-                content_array = content_array + documents
-            elif get_suffix(content_path, 'html') or get_suffix(content_path, 'htm'):
-                documents = extract_doc_from_html(content_path)
-                content_array = content_array + documents
-            elif get_suffix(content_path, 'wbx'):
-                lines = read_lines(content_path)
-                for url in lines:
-                    documents = extract_doc_from_web_html(url)
-                    content_array = content_array + documents
-            else:
-                print(f"The {content_path} cannot pe processed.... go on with next entry")
-    return 0, content_array
 
 
 
@@ -210,7 +127,7 @@ if __name__ == '__main__':
         print(complete_content[0])
         vector_db = add_documents(complete_content, get_dbpath(), False)
     elif mode == 'addhist':
-        ret_code, complete_content = read_all_docs(['/Users/hglabplhak/collections/history_edu/wars'])
+        ret_code, complete_content = read_all_docs(['/Users/hglabplhak/collections/history_edu/more_ger'])
         print(complete_content[0])
         vector_db = add_documents(complete_content, get_db_history_path(), False)
     print(f"ready at {actual_time()}")

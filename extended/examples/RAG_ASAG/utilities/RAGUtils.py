@@ -1,4 +1,7 @@
 import os
+import time
+import bs4
+import datetime
 from pathlib import Path
 from langchain_chroma import Chroma
 from langchain_community.vectorstores import SKLearnVectorStore
@@ -10,10 +13,100 @@ from langchain_core.embeddings.fake import DeterministicFakeEmbedding
 from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaEmbeddings
+from langchain_classic.chains import LLMChain, SimpleSequentialChain
+from langchain_classic.chains import RetrievalQA
+from langchain_core.output_parsers import StrOutputParser
 
 CSIZE_CONST = 1024
+def extract_doc_from_web_html(url):
+    # Only keep post title, headers, and content from the full HTML.
+    bs4_strainer = bs4.SoupStrainer(class_=("post-title", "post-header", "post-content"))
+    loader = WebBaseLoader(
+        web_paths=(url),
+        bs_kwargs={"parse_only": bs4_strainer},
+    )
+    docs = loader.load()
+    return docs
+
+def extract_doc_from_html(file_path):
+    html_loader = UnstructuredHTMLLoader(file_path)
+    docs = html_loader.load()
+    return docs
+
+def extract_doc_from_text(file_path):
+    text_loader = TextLoader(file_path)
+    docs = text_loader.load()
+    return docs
+
+def extract_doc_from_markdown(file_path):
+    md_loader = UnstructuredMarkdownLoader(file_path)
+    docs = md_loader.load()
+    return docs
+
+def extract_doc_from_word(file_path):
+    docx_loader = UnstructuredWordDocumentLoader(file_path)
+    docs = docx_loader.load()
+    return docs
 
 
+def extract_doc_from_pdf(file_path):
+    # creating a pdf reader object
+
+
+    loader = PyPDFLoader(
+        file_path,
+        mode="page",
+        #images_parser=RapidOCRBlobParser(),
+    )
+    documents = loader.load()
+    # printing number of pages in pdf file
+    page_count = len(documents)
+    print(f'Number of pages: {page_count}')
+    # getting a specific page from the pdf file
+    return documents
+
+def read_lines(file_path):
+    with open(file_path, 'r') as infile:
+        lines = infile.readlines()
+        return lines
+
+def get_suffix(f, suffix: str):
+    _,ext = os.path.splitext(f)
+    return (ext == '.' + suffix)
+# %% [markdown]
+#
+# %%
+def read_all_docs(data_paths):
+    # absolute_path = data_path + '/Pdf'
+    content_array = []
+    for data_path in data_paths:
+        filenames = os.listdir(data_path)
+        for filename in filenames:
+            content_path = os.path.join(data_path, filename)
+            print(f"Collecting: {content_path}.... ")
+            if get_suffix(content_path, 'pdf'):
+                documents = extract_doc_from_pdf(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'txt'):
+                documents = extract_doc_from_text(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'md'):
+                documents = extract_doc_from_markdown(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'docx'):
+                documents = extract_doc_from_word(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'html') or get_suffix(content_path, 'htm'):
+                documents = extract_doc_from_html(content_path)
+                content_array = content_array + documents
+            elif get_suffix(content_path, 'wbx'):
+                lines = read_lines(content_path)
+                for url in lines:
+                    documents = extract_doc_from_web_html(url)
+                    content_array = content_array + documents
+            else:
+                print(f"The {content_path} cannot pe processed.... go on with next entry")
+    return 0, content_array
 def CHUNK_SIZE():
     chunk_size = CSIZE_CONST
     chunk_overlap = ((CSIZE_CONST / 100) *  15)
@@ -32,6 +125,8 @@ def get_app_key_in_parent():
         app_key = f.read()
         f.close()
         return app_key
+def actual_time():
+    return datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
 
 def build_vectors(complete_content, db_path, parent):
     # 2. Embed and Store in Vector DB (Chroma)
@@ -81,6 +176,14 @@ def get_db_base_path():
         os.makedirs(db_base_path)
     return db_base_path
 
+def get_rag_config_path():
+    home = Path.home()
+    conf_base_path = os.path.join(home, 'RAGConf')
+    if not os.path.exists(conf_base_path):
+        os.makedirs(conf_base_path)
+    config_path = os.path.join(conf_base_path, "config.ini")
+    return config_path
+
 def get_dbpath():
     home = Path.home()
     db_path = os.path.join(get_db_base_path(), "sklearn_store")
@@ -109,7 +212,29 @@ def set_api_env_and_keys_in_parent():
     os.environ['OPENAI_API_KEY'] = app_key
     return
 
+def get_vector_db(db_path):
+    embeddings = get_embedding('openai',False)
+    #embeddings = DeterministicFakeEmbedding(size=4096)
+    #embeddings = DeterministicFakeEmbedding(size=1024)
+    #embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    vector_db = SKLearnVectorStore(embedding=embeddings,
+                                   persist_path=db_path,
+                                   serializer="parquet")
+    return vector_db
 
+def query_execute(vector_db, query):
+    print(f"Start query at: {actual_time()}")
+    result = vector_db.similarity_search(query, k=3)
+    answer = vector_db.similarity_search_with_score(query, k=3)
+    relevance = vector_db.similarity_search_with_relevance_scores(query, k=3)
+
+    retriever = vector_db.as_retriever(search_kwargs={"k": 3})
+
+    q_result = retriever.invoke(query)
+
+    print(f"Finish query at: {actual_time()}")
+
+    return answer, result, relevance, q_result
 
 def get_embedding(key: str, parent: bool):
     if key == 'openai':

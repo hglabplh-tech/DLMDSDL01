@@ -37,11 +37,11 @@ def do_score(stud_answer, ref, keywords):
     rule_grad = rule_based_grading(stud_answer, keywords)
     tdiff_scoring = get_asag_score(stud_answer, ref)
     score, relevance = semantic_asag(stud_answer, ref, False)
-    score_jac, relevance_jac, distance_jac = get_jaccard_sim(stud_answer, ref)
+    score_jac, relevance_jac, distance_jac, rel_dist_jac = get_jaccard_sim(stud_answer, ref)
     tot_rel = ((relevance * asag_semantic_weight) + (relevance_jac * asag_jaccard_weight)) / (asag_jaccard_weight + asag_semantic_weight)
     tot_score = (((score * asag_semantic_weight) + (score_jac * asag_jaccard_weight))) / (asag_jaccard_weight + asag_semantic_weight)
 
-    return score, relevance, tot_score, tot_rel, score_jac, relevance_jac,distance_jac, rule_grad, tdiff_scoring
+    return score, relevance, tot_score, tot_rel, score_jac, relevance_jac,distance_jac, rel_dist_jac, rule_grad, tdiff_scoring
 
 def calculate_points_per_item(tot_score, tot_rel, rule_grad, tdiff_scoring, points):
     config = ConfigReader.myinstance(get_rag_config_path(), conf_section)
@@ -53,19 +53,22 @@ def calculate_points_per_item(tot_score, tot_rel, rule_grad, tdiff_scoring, poin
         calc_points = 0.0
     return round(calc_points, 1)
 
-def score_answers(questions, answers, keyword_array, points_array, tot_points,stud_ans):
+def score_answers(questions, answers, keyword_array, points_array, tot_points,stud_ans, mode):
     tot_calc_points = 0
     for index in range(len(questions)):
-        stud_answer = stud_ans[index]
+        if mode == 'batch':
+            stud_answer = stud_ans[index]
+        else:
+            stud_answer = input(f"Answer the question: {questions[index]}")
         print(f'stud_answer: {stud_answer}')
         answer = answers[index]
         keywords = keyword_array[index]
         points = points_array[index]
-        score, relevance, tot_score, tot_rel, score_jac, relevance_jac,dist_jac, rule_grad, tdiff_scoring = do_score(stud_answer, answer, keywords)
+        score, relevance, tot_score, tot_rel, score_jac, relevance_jac,dist_jac, rel_dist_jac, rule_grad, tdiff_scoring = do_score(stud_answer, answer, keywords)
         print(f"rule grad: {rule_grad}")
         print(f"ASAG score: {tdiff_scoring}")
         print(f"GPT score: {score}, relevance: {relevance}")
-        print(f"Jaccard score: {score_jac}, relevance: {relevance_jac} Distance: {dist_jac}")
+        print(f"Jaccard score: {score_jac}, relevance: {relevance_jac} Distance: {dist_jac} Relevance Dist {rel_dist_jac}")
         print(f"Total score: {tot_score}, relevance: {tot_rel}")
         calc_points = calculate_points_per_item(tot_score, tot_rel, rule_grad, tdiff_scoring, points)
         print(f"Calculate Points Task {index} = {calc_points}")
@@ -94,13 +97,18 @@ if __name__ == '__main__':
     conf_section = input("Configuration / discipline:")
     exam_work_path = f'/Users/hglabplhak/examinations/{conf_section}/works/'
     set_config(conf_section)
-    fname = input('Class work:')
-    answer_array = read_exam_work(exam_work_path, fname)
-    questions, answers, keywords, points_array, tot_points = read_exam_solution(f'/Users/hglabplhak/examinations/{conf_section}/short_test.exam')
+    mode = input("Mode interactive/batch:")
+    if mode == 'batch':
+        fname = input('Class work:')
+        answer_array = read_exam_work(exam_work_path, fname)
+    else:
+        answer_array = []
+    questions, answers, keywords, points_array, tot_points = read_exam_solution(
+        f'/Users/hglabplhak/examinations/{conf_section}/short_test.exam')
     print(questions)
     print(answers)
     print (keywords)
     print(points_array)
     print(tot_points)
-    percent =  score_answers(questions, answers, keywords, points_array, tot_points, answer_array)
+    percent =  score_answers(questions, answers, keywords, points_array, tot_points, answer_array, mode)
     print(f"Quit with {percent} %")

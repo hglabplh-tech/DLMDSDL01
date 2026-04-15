@@ -3,14 +3,16 @@ import time
 import bs4
 import datetime
 from pathlib import Path
-from langchain_chroma import Chroma
+
 from langchain_community.vectorstores import SKLearnVectorStore
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredHTMLLoader, WebBaseLoader, TextLoader, UnstructuredMarkdownLoader, UnstructuredWordDocumentLoader
 from langchain_community.document_loaders.parsers import RapidOCRBlobParser
 from langchain_text_splitters import CharacterTextSplitter, RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_core.embeddings.fake import DeterministicFakeEmbedding
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings,ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaEmbeddings
 from langchain_classic.chains import LLMChain, SimpleSequentialChain
@@ -222,13 +224,56 @@ def get_vector_db(db_path):
                                    serializer="parquet")
     return vector_db
 
+def load_vector_db():
+    db_to_use = input("Query DB(main/hist/temp) : ")
+    db_path = ''
+    if db_to_use == 'main':
+        db_path = get_dbpath()
+    elif db_to_use == 'hist':
+        db_path = get_db_history_path()
+    else:
+        db_path = get_db_temp_path()
+    return get_vector_db(db_path)
+
+def generate_follow_ups(vector_db, original_query, context, generated_answer):
+    print(f"Start query at: {actual_time()}")
+    prompt = ChatPromptTemplate.from_template(
+        "Original Question: {query}\n"
+        "Retrieved Knowledge: {context}\n"
+        "Provided Answer: {answer}\n\n"
+        "Logic Task:\n"
+        "1. Identify key terms in the Knowledge that weren't fully explained in the Answer.\n"
+        "2. Write a summary\n"        
+        #"3. Propose 3 follow-up questions that lead to a deeper understanding.\n"
+        "3. Propose 3 follow-up questions\n"
+        "4. Give the references \n"
+
+    )
+
+    raw_query = prompt.invoke({
+        "query": original_query,
+        "context": context,
+        "answer": generated_answer
+    })
+    query = raw_query.to_string()
+    result = vector_db.similarity_search(query, k=3)
+    answer = vector_db.similarity_search_with_score(query, k=3)
+    relevance = vector_db.similarity_search_with_relevance_scores(query, k=3)
+    retriever = get_as_retriever(vector_db)
+    q_result = retriever.invoke(query)
+    print(f"Finish query at: {actual_time()}")
+    return answer, result, relevance, q_result
+
+def get_as_retriever(vector_db):
+    return vector_db.as_retriever(search_kwargs={"k": 3})
+
 def query_execute(vector_db, query):
     print(f"Start query at: {actual_time()}")
     result = vector_db.similarity_search(query, k=3)
     answer = vector_db.similarity_search_with_score(query, k=3)
     relevance = vector_db.similarity_search_with_relevance_scores(query, k=3)
 
-    retriever = vector_db.as_retriever(search_kwargs={"k": 3})
+    retriever = get_as_retriever(vector_db)
 
     q_result = retriever.invoke(query)
 
@@ -249,3 +294,12 @@ def get_embedding(key: str, parent: bool):
         return HuggingFaceEmbeddings()
     else:
         return DeterministicFakeEmbedding(size=4096)
+
+def printout_results(answer, result, relevance, q_result):
+    print(f"Relevance result: {relevance}")
+    print(f"Query result scored: {answer}")
+    printout_retrieved_docs(q_result)
+    print(f"Document content: {result[0].page_content}")
+
+def printout_retrieved_docs(q_result):
+    print(f"Retrieved Result: {q_result}")

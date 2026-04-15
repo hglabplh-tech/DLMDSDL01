@@ -7,7 +7,7 @@ from langchain_classic.chains import RetrievalQA
 from langchain_core.output_parsers import StrOutputParser
 from langchain_classic.chains import create_retrieval_chain
 
-from utilities.RAGUtils import get_app_key, get_embedding, get_db_temp_path, get_db_history_path, get_dbpath, query_execute, get_vector_db
+from utilities.RAGUtils import get_app_key, get_embedding, get_db_temp_path, get_db_history_path, get_dbpath, query_execute, get_vector_db, printout_results
 
 def set_api_env_and_keys(mode):
     app_key = get_app_key()
@@ -18,14 +18,7 @@ def set_api_env_and_keys(mode):
 
 
 
-def printout_results(answer, result, relevance, q_result):
-    print(f"Relevance result: {relevance}")
-    print(f"Query result scored: {answer}")
-    printout_retrieved_docs(q_result)
-    print(f"Document content: {result[0].page_content}")
 
-def printout_retrieved_docs(q_result):
-    print(f"Retrieved Result: {q_result}")
 
 def print_answer(result):
     print(result)
@@ -74,8 +67,9 @@ def inputPrompt(prompt, index):
     query = input(f"{prompt}({index}) : ")
     return  query
 
-if __name__ == '__main__':
-    index = 0
+
+def load_vector_db():
+    global vector_db
     db_to_use = input("Query DB(main/hist/temp) : ")
     db_path = ''
     if db_to_use == 'main':
@@ -85,6 +79,11 @@ if __name__ == '__main__':
     else:
         db_path = get_db_temp_path()
     vector_db = get_vector_db(db_path)
+
+
+if __name__ == '__main__':
+    index = 0
+    load_vector_db()
 
     query = inputPrompt('Prompt', index)
     while  query != 'exit':

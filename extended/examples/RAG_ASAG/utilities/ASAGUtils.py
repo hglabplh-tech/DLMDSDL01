@@ -80,10 +80,10 @@ def get_jaccard_sim(ans, ref):
 
     if score_union:
         score = float(len(score_intersect)) / float(len(score_union))
-        distance = float(len(sym_diff)) / float(len(score_union))
+        score_distance = float(len(sym_diff)) / float(len(score_union))
     else:
         score = 0.0
-        distance = 0.0
+        score_distance = 0.0
 
     # Step 3: make intersection for relevance
     rel_intersect = ref_set.intersection(ans_set)
@@ -91,10 +91,12 @@ def get_jaccard_sim(ans, ref):
 
     if ref_set:
         relevance = float(len(rel_intersect)) / float(len(ref_set))
+        rel_distance =  float(len(sym_diff)) / float(len(ref_set))
     else:
         relevance = 0.0
+        rel_distance  = 0.0
 
-    return round(score,2), round(relevance, 2), round(distance, 2)
+    return round(score,2), round(relevance, 2), round(score_distance, 2), round(rel_distance, 2)
 
 ## Examples main
 if __name__ == '__main__':
@@ -116,5 +118,5 @@ if __name__ == '__main__':
    # ref = "The mitochondria is the powerhouse of the cell"
    # ans = "Mitochondria is a cell powerhouse"
     #ans = "I saw a pink elefant"
-    score, relevance, distance = get_jaccard_sim(ans, ref)
+    score, relevance, distance, rel_dist = get_jaccard_sim(ans, ref)
     print(f"Jaccard Similarity Score: {score:.2f} - Relevance: {relevance:.2f}")

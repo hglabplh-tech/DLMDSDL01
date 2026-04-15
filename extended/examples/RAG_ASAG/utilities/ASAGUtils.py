@@ -3,10 +3,17 @@ from scipy.spatial import distance
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from utilities.RAGUtils import get_embedding, get_db_temp_path, build_vectors
-
-
+from transformers import BertTokenizer
 from langchain_core.documents import Document
 
+
+def doErnieAndBERT(answer='NO Answer given'):
+    # 1. Load the tokenizer
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    # 2. Tokenize and convert to IDs
+    inputs = tokenizer(answer, return_tensors="pt")
+    print(inputs['input_ids'])
+    return inputs
 
 def get_asag_score(student_answer, reference_answer):
     # Convert text to numerical vectors
@@ -40,6 +47,8 @@ def semantic_asag(student_ans, ref_ans, parent):
     for item in scored_result[0]:
         if index == 1:
             score = item
+        if index == 0:
+            answer = item.page_content
         index = index + 1
 
     index = 0
@@ -58,7 +67,7 @@ def semantic_asag(student_ans, ref_ans, parent):
 
     # Compute cosine similarity between the embeddings
     #vector_db.remove()
-    return round(score, 2), round(relevance, 2)
+    return round(score, 2), round(relevance, 2), answer
 
 def rule_based_grading(student_ans, keywords):
     student_ans = student_ans.lower()
@@ -107,7 +116,8 @@ if __name__ == '__main__':
     #ref = "Photosynthesis converts light energy into chemical energy."
    # ans = "Plants use sunlight to make food energy."
     #ans = "Red computers are cool"
-    score, relevance = semantic_asag(ans, ref, True)
+    score, relevance, answer = semantic_asag(ans, ref, True)
+    doErnieAndBERT(answer)
     print(f"Semantic Score: {score:.2f} - Semantic relevance: {relevance:.2f}")
 
 

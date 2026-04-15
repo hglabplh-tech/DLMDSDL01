@@ -36,7 +36,7 @@ def do_score(stud_answer, ref, keywords):
     asag_jaccard_weight = config.read_val_float('asag_jaccard_weight')
     rule_grad = rule_based_grading(stud_answer, keywords)
     tdiff_scoring = get_asag_score(stud_answer, ref)
-    score, relevance = semantic_asag(stud_answer, ref, False)
+    score, relevance, answer = semantic_asag(stud_answer, ref, False)
     score_jac, relevance_jac, distance_jac, rel_dist_jac = get_jaccard_sim(stud_answer, ref)
     tot_rel = ((relevance * asag_semantic_weight) + (relevance_jac * asag_jaccard_weight)) / (asag_jaccard_weight + asag_semantic_weight)
     tot_score = (((score * asag_semantic_weight) + (score_jac * asag_jaccard_weight))) / (asag_jaccard_weight + asag_semantic_weight)

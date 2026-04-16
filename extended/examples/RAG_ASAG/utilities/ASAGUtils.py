@@ -39,6 +39,7 @@ def get_sentence_scoring(student_answer, reference_answer):
     print(f"Grading Score: {score.item():.4f}")
     return score.item()
 
+## see why score is negative
 def get_bert_model_scoring(question, student_answer, reference_answer):
     vectorizer = TfidfVectorizer()
     # Example usage for inference

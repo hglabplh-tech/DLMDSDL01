@@ -24,7 +24,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaEmbeddings
 
 
-from utilities.RAGUtils import build_vectors, get_dbpath, get_db_history_path, actual_time
+from utilities.RAGUtils import build_vectors, get_db_lit_path, get_db_inf_path, get_db_history_path, actual_time
 from utilities.RAGUtils import CHUNK_SIZE, add_documents, read_all_docs, read_lines
 
 def get_embedding(key: str):
@@ -39,10 +39,6 @@ def get_embedding(key: str):
         return DeterministicFakeEmbedding(size=4096)
 
 
-dataset_of_pdf_files_path = kagglehub.dataset_download('manisha717/dataset-of-pdf-files')
-print(f"The dataset is loaded to the path: {dataset_of_pdf_files_path}")
-
-
 def get_app_key():
     fname = 'app_keyid.sec'
     with open(fname) as f:
@@ -52,7 +48,7 @@ def get_app_key():
 
 
 def write_index_row(id, path):
-    with open(get_dbpath() + "/id_index", 'w') as csv:
+    with open(get_db_inf_path() + "/id_index", 'w') as csv:
         row = id + ',' + path
         csv.writelines([row])
 
@@ -70,19 +66,6 @@ def set_api_env_and_keys():
     os.environ['OPENAI_API_KEY'] = app_key
     return
 
-
-
-# %% [markdown]
-# 
-# %%
-
-
-
-
-
-
-
-
 def update_vectors(complete_content):
     chunk_size, chunk_overlap = CHUNK_SIZE()
     splitter =  RecursiveCharacterTextSplitter(
@@ -95,39 +78,39 @@ def update_vectors(complete_content):
 
     return vector_db
 
-
-# %% [markdown]
-# 
-# %%
-# docs_array = read_all_docs(dataset_of_pdf_files_path)
 if __name__ == '__main__':
     set_api_env_and_keys()
-    absolute_path = dataset_of_pdf_files_path + '/Pdf'
-    mode = input("Select mode create / createhist / add / addhist / update(**later**): ")
+
+    mode = input("Select mode create / createhist / createlit / add / addhist/ addlit / update(**later**): ")
     print(f"start collecting pdf datas at {actual_time()}....")
     if mode == 'create':
         ret_code, complete_content = read_all_docs(
-            ['/Users/hglabplhak/collections/pdfdb', '/Users/hglabplhak/collections/persons'])
+            ['compscience'])
 
         print("build vector")
-        vector_db = build_vectors(complete_content, get_dbpath(), False)
+        vector_db = build_vectors(complete_content, get_db_inf_path(), False)
     elif mode == 'createhist':
         ret_code, complete_content = read_all_docs(
-            ['/Users/hglabplhak/collections/history_edu'])
+            ['history'])
 
         print("build vector")
         vector_db = build_vectors(complete_content, get_db_history_path(), False)
+    elif mode == 'createlit':
+        ret_code, complete_content = read_all_docs(
+            ['literature'])
+
+        print("build vector")
+        vector_db = build_vectors(complete_content, get_db_lit_path(), False)
     elif mode == 'add':
-        # have to rewrite this
-      #  ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/collections/pdfadds', '//Users/hglabplhak/collections/pdfprivdb',
-        #  '/Users/hglabplhak/collections/mixeddb'])
-        #ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/collections/pdfadds'])
-        #ret_code2, complete_content2 = read_all_docs(['/Users/hglabplhak/collections/pdfprivdb'])
-        ret_code, complete_content = read_all_docs(['/Users/hglabplhak/collections/mixeddb'])
+        ret_code, complete_content = read_all_docs(['comp-add3'])
         print(complete_content[0])
-        vector_db = add_documents(complete_content, get_dbpath(), False)
+        vector_db = add_documents(complete_content, get_db_inf_path(), False)
     elif mode == 'addhist':
         ret_code, complete_content = read_all_docs(['/Users/hglabplhak/collections/history_edu/more_ger'])
         print(complete_content[0])
         vector_db = add_documents(complete_content, get_db_history_path(), False)
+    elif mode == 'addlit':
+        ret_code, complete_content = read_all_docs(['/Users/hglabplhak/collections/history_edu/more_ger'])
+        print(complete_content[0])
+        vector_db = add_documents(complete_content, get_db_lit_path(), False)
     print(f"ready at {actual_time()}")

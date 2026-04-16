@@ -5,6 +5,7 @@ from pathlib import Path
 from utilities.ConfigReader import ConfigReader
 from utilities.RAGUtils import get_rag_config_path
 from utilities.ASAGUtils import get_asag_score, semantic_asag, get_jaccard_sim, rule_based_grading
+from utilities.ASAGUtils import get_sentence_scoring, get_bert_model_scoring
 
 config = None
 def read_exam_solution(exam_file):
@@ -30,12 +31,14 @@ def read_exam_solution(exam_file):
             points_array.append(int_points)
     return questions, answers, keywords, points_array, tot_points
 
-def do_score(stud_answer, ref, keywords):
+def do_score(stud_answer, ref, keywords, question):
     config = ConfigReader.myinstance(get_rag_config_path(), conf_section)
     asag_semantic_weight = config.read_val_float('asag_semantic_weight')
     asag_jaccard_weight = config.read_val_float('asag_jaccard_weight')
     rule_grad = rule_based_grading(stud_answer, keywords)
     tdiff_scoring = get_asag_score(stud_answer, ref)
+    sentence_scoring = get_sentence_scoring(stud_answer, ref)
+    bert_scoring = get_bert_model_scoring(question,stud_answer, ref)
     score, relevance, answer = semantic_asag(stud_answer, ref, False)
     score_jac, relevance_jac, distance_jac, rel_dist_jac = get_jaccard_sim(stud_answer, ref)
     tot_rel = ((relevance * asag_semantic_weight) + (relevance_jac * asag_jaccard_weight)) / (asag_jaccard_weight + asag_semantic_weight)

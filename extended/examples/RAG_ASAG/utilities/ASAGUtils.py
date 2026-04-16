@@ -1,10 +1,53 @@
+import os
+
 from openai.types.shared_params import metadata
 from scipy.spatial import distance
+from sentence_transformers.sentence_transformer.modules import tokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from utilities.RAGUtils import get_embedding, get_db_temp_path, build_vectors
-from transformers import BertTokenizer
 from langchain_core.documents import Document
+from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments
+from sentence_transformers import SentenceTransformer, util
+
+def get_BERT_PreReq():
+    # 1. Initialize tokenizer and model for regression (outputting a score)
+    model_name = "bert-base-uncased"
+    tokenizer = BertTokenizer.from_pretrained(model_name)
+    model = BertForSequenceClassification.from_pretrained(model_name, num_labels=1) # 1 for regression
+    return tokenizer, model
+
+# 2. Prepare input (combining question, reference, and student answer)
+def prepare_input(question, reference, student, tokenizer, model):
+    return tokenizer(f"{question} [SEP] {reference}", student,
+                     truncation=True, padding='max_length', return_tensors="pt")
+
+def get_sentence_scoring(student_answer, reference_answer):
+
+
+    # 1. Load a pre-trained SBERT model
+    model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+
+
+    # 2. Compute embeddings
+    ref_embedding = model.encode(reference_answer, convert_to_tensor=True)
+    stu_embedding = model.encode(student_answer, convert_to_tensor=True)
+
+    # 3. Calculate cosine similarity (the "grade")
+    score = util.pytorch_cos_sim(ref_embedding, stu_embedding)
+    print(f"Grading Score: {score.item():.4f}")
+    return score.item()
+
+def get_bert_model_scoring(question, student_answer, reference_answer):
+    vectorizer = TfidfVectorizer()
+    # Example usage for inference
+    tfidf = vectorizer.fit_transform([question, student_answer, reference_answer])
+    tokenizer, model = get_BERT_PreReq()
+    inputs = prepare_input(question, reference_answer, student_answer,tokenizer, model)
+    outputs = model(**inputs)
+    predicted_score = outputs.logits.item()
+    return predicted_score
 
 
 def doErnieAndBERT(answer='NO Answer given'):
@@ -109,17 +152,25 @@ def get_jaccard_sim(ans, ref):
 
 ## Examples main
 if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['HF_TOKENIZERS_PARALLELISM'] = 'false'
+    os.environ['HF_TOKEN'] ="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"
     ref = "The mitochondria is the powerhouse of the cell."
     ans = "Mitochondria are the cells powerhouse."
     print(f"Similarity Score: {get_asag_score(ans, ref)}")
-
+    question = "Explain what the  Mitochondria is ?"
     #ref = "Photosynthesis converts light energy into chemical energy."
-   # ans = "Plants use sunlight to make food energy."
+   # ans = "Plants use sunlight to imake food energy."
     #ans = "Red computers are cool"
     score, relevance, answer = semantic_asag(ans, ref, True)
-    doErnieAndBERT(answer)
     print(f"Semantic Score: {score:.2f} - Semantic relevance: {relevance:.2f}")
-
+    doErnieAndBERT(answer)
+    sentence_score = get_sentence_scoring(ans, ref)
+    print(f"sentence Score: {sentence_score:.2f}")
+    bert_model_score = get_bert_model_scoring(question, ans, ref)
+    print(f"bert model Score: {bert_model_score:.2f}")
 
     key_terms = ["Mitochondria", "Powerhouse", "Cell"]
    # student = "Cells have powerhouse organelles."

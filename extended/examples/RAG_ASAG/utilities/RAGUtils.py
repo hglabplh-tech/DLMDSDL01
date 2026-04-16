@@ -79,9 +79,9 @@ def get_suffix(f, suffix: str):
 #
 # %%
 def read_all_docs(data_paths):
-    # absolute_path = data_path + '/Pdf'
     content_array = []
-    for data_path in data_paths:
+    for data_rel_path in data_paths:
+        data_path = os.path.join(Path.home(),  'collections', data_rel_path)
         filenames = os.listdir(data_path)
         for filename in filenames:
             content_path = os.path.join(data_path, filename)
@@ -186,17 +186,20 @@ def get_rag_config_path():
     config_path = os.path.join(conf_base_path, "config.ini")
     return config_path
 
-def get_dbpath():
-    home = Path.home()
-    db_path = os.path.join(get_db_base_path(), "sklearn_store")
+def get_db_inf_path():
+    db_path = os.path.join(get_db_base_path(), "info_store")
     return db_path
 
 def get_db_temp_path():
     db_path = os.path.join(get_db_base_path(), "temp_store")
     return db_path
 
+def get_db_lit_path():
+    db_path = os.path.join(get_db_base_path(), "lit_store")
+    return db_path
+
 def get_db_history_path():
-    db_path = os.path.join(get_db_base_path(), "history_edu_store")
+    db_path = os.path.join(get_db_base_path(), "history_store")
     return db_path
 
 
@@ -225,12 +228,14 @@ def get_vector_db(db_path):
     return vector_db
 
 def load_vector_db():
-    db_to_use = input("Query DB(main/hist/temp) : ")
+    db_to_use = input("DB to use -> comp-science/history/literature/temp : ")
     db_path = ''
-    if db_to_use == 'main':
-        db_path = get_dbpath()
-    elif db_to_use == 'hist':
+    if db_to_use == 'comp-science':
+        db_path = get_db_inf_path()
+    elif db_to_use == 'history':
         db_path = get_db_history_path()
+    elif db_to_use == 'literature':
+        db_path = get_db_lit_path()
     else:
         db_path = get_db_temp_path()
     return get_vector_db(db_path)

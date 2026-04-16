@@ -5,7 +5,7 @@ from scipy.spatial import distance
 from sentence_transformers.sentence_transformer.modules import tokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from utilities.RAGUtils import get_embedding, get_db_temp_path, build_vectors
+from utilities.RAGUtils import get_embedding, get_db_temp_path, build_vectors, set_api_env_and_keys_in_parent
 from langchain_core.documents import Document
 from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments
 from sentence_transformers import SentenceTransformer, util
@@ -152,11 +152,7 @@ def get_jaccard_sim(ans, ref):
 
 ## Examples main
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    os.environ['MKL_NUM_THREADS'] = '1'
-    os.environ['HF_TOKENIZERS_PARALLELISM'] = 'false'
-    os.environ['HF_TOKEN'] ="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"
+    set_api_env_and_keys_in_parent()
     ref = "The mitochondria is the powerhouse of the cell."
     ans = "Mitochondria are the cells powerhouse."
     print(f"Similarity Score: {get_asag_score(ans, ref)}")

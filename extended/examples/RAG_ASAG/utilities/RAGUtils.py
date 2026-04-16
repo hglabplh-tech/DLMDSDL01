@@ -120,9 +120,21 @@ def get_app_key():
         app_key = f.read()
         f.close()
         return app_key
+def get_hugg_key():
+    fname = 'hugg_keyid.sec'
+    with open(fname) as f:
+        app_key = f.read()
+        f.close()
+        return app_key
 
 def get_app_key_in_parent():
     fname = '../app_keyid.sec'
+    with open(fname) as f:
+        app_key = f.read()
+        f.close()
+        return app_key
+def get_hugg_key_in_parent():
+    fname = '../hugg_keyid.sec'
     with open(fname) as f:
         app_key = f.read()
         f.close()
@@ -205,16 +217,28 @@ def get_db_history_path():
 
 def set_api_env_and_keys():
     app_key = get_app_key()
+    hugg_key =get_hugg_key()
     os.environ['LANGCHAIN_TRACING_V2'] = 'true'
     os.environ['LANGCHAIN_API_KEY'] = app_key
     os.environ['OPENAI_API_KEY'] = app_key
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['HF_TOKENIZERS_PARALLELISM'] = 'false'
+    os.environ['HF_TOKEN'] = hugg_key
     return
 
 def set_api_env_and_keys_in_parent():
     app_key = get_app_key_in_parent()
+    hugg_key = get_hugg_key_in_parent()
     os.environ['LANGCHAIN_TRACING_V2'] = 'true'
     os.environ['LANGCHAIN_API_KEY'] = app_key
     os.environ['OPENAI_API_KEY'] = app_key
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['HF_TOKENIZERS_PARALLELISM'] = 'false'
+    os.environ['HF_TOKEN'] = hugg_key
     return
 
 def get_vector_db(db_path):

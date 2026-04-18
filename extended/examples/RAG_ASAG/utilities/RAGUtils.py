@@ -142,6 +142,9 @@ def get_hugg_key_in_parent():
 def actual_time():
     return datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
 
+def actual_classw_ts():
+    return datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d[%H:%M]')
+
 def build_vectors(complete_content, db_path, parent):
     # 2. Embed and Store in Vector DB (Chroma)
     chunk_size, chunk_overlap = CHUNK_SIZE()

@@ -1,8 +1,10 @@
 import os
 
+from keras.src.layers.preprocessing import rescaling
 from openai.types.shared_params import metadata
 from scipy.spatial import distance
 from sentence_transformers.sentence_transformer.modules import tokenizer
+from bert_score import score as bert_cosine_sim
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from utilities.RAGUtils import get_embedding, get_db_temp_path, build_vectors, set_api_env_and_keys_in_parent
@@ -23,17 +25,11 @@ def prepare_input(question, reference, student, tokenizer, model):
                      truncation=True, padding='max_length', return_tensors="pt")
 
 def get_sentence_scoring(student_answer, reference_answer):
-
-
     # 1. Load a pre-trained SBERT model
     model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-
-
-
     # 2. Compute embeddings
     ref_embedding = model.encode(reference_answer, convert_to_tensor=True)
     stu_embedding = model.encode(student_answer, convert_to_tensor=True)
-
     # 3. Calculate cosine similarity (the "grade")
     score = util.pytorch_cos_sim(ref_embedding, stu_embedding)
     print(f"Grading Score: {score.item():.4f}")
@@ -41,6 +37,7 @@ def get_sentence_scoring(student_answer, reference_answer):
 
 ## see why score is negative
 def get_bert_model_scoring(question, student_answer, reference_answer):
+    base = 0.70
     vectorizer = TfidfVectorizer()
     # Example usage for inference
     tfidf = vectorizer.fit_transform([question, student_answer, reference_answer])
@@ -48,8 +45,13 @@ def get_bert_model_scoring(question, student_answer, reference_answer):
     inputs = prepare_input(question, reference_answer, student_answer,tokenizer, model)
     outputs = model(**inputs)
     predicted_score = outputs.logits.item()
-    return predicted_score
-
+    print(f"BERT Score: {predicted_score:.4f}")
+    fin_score = abs(((predicted_score - base) / (1 - base)/ 10))
+    #p, r, fin_score  = bert_cosine_sim(cands=student_answer, refs=reference_answer,  rescale_with_baseline=True)
+    #print(f"P: {p}")
+    #print(f"R: {r}")
+    #print(f"FIN Score: {fin_score:.4f}")
+    return fin_score
 
 def doErnieAndBERT(answer='NO Answer given'):
     # 1. Load the tokenizer
@@ -168,6 +170,13 @@ if __name__ == '__main__':
     print(f"sentence Score: {sentence_score:.2f}")
     bert_model_score = get_bert_model_scoring(question, ans, ref)
     print(f"bert model Score: {bert_model_score:.2f}")
+    bert_model_score = round(bert_model_score, 2)
+    if bert_model_score >= 0.7:
+        print(f"{bert_model_score:2f} is weak")
+    elif bert_model_score < 0.3 and bert_model_score > 0.2:
+        print(f"{bert_model_score:2f} is middle")
+    elif bert_model_score >= 0 and bert_model_score <= 0.2:
+        print(f"{bert_model_score:2f} is high")
 
     key_terms = ["Mitochondria", "Powerhouse", "Cell"]
    # student = "Cells have powerhouse organelles."

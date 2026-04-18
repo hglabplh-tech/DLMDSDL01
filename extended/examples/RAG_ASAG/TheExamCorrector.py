@@ -3,9 +3,10 @@ import os
 from pathlib import Path
 
 from utilities.ConfigReader import ConfigReader
-from utilities.RAGUtils import get_rag_config_path
+from utilities.RAGUtils import get_rag_config_path,actual_classw_ts
 from utilities.ASAGUtils import get_asag_score, semantic_asag, get_jaccard_sim, rule_based_grading
 from utilities.ASAGUtils import get_sentence_scoring, get_bert_model_scoring
+from utilities.HashUtility import calculate_and_write_hash_to_file
 
 config = None
 def read_exam_solution(exam_file):
@@ -17,12 +18,17 @@ def read_exam_solution(exam_file):
     with open(exam_file) as f:
         content = f.read()
         splitted_cont = content.split('|')
+        print(splitted_cont)
         for item in splitted_cont:
             splitted_item = item.split('#')
             question = splitted_item.__getitem__(0)
+            print(question)
             answer = splitted_item.__getitem__(1)
+            print(answer)
             keyword = splitted_item.__getitem__(2)
+            print(keyword)
             points = splitted_item.__getitem__(3)
+            print(points)
             questions.append(question)
             answers.append(answer)
             keywords.append(keyword)
@@ -31,18 +37,24 @@ def read_exam_solution(exam_file):
             points_array.append(int_points)
     return questions, answers, keywords, points_array, tot_points
 
-def do_score(stud_answer, ref, keywords, question):
+def do_score(question, stud_answer, ref, keywords):
     config = ConfigReader.myinstance(get_rag_config_path(), conf_section)
     asag_semantic_weight = config.read_val_float('asag_semantic_weight')
     asag_jaccard_weight = config.read_val_float('asag_jaccard_weight')
+    asag_bert_weight = config.read_val_float('asag_bert_weight')
+    asag_sentence_weight = config.read_val_float('asag_sentence_weight')
     rule_grad = rule_based_grading(stud_answer, keywords)
     tdiff_scoring = get_asag_score(stud_answer, ref)
     sentence_scoring = get_sentence_scoring(stud_answer, ref)
     bert_scoring = get_bert_model_scoring(question,stud_answer, ref)
     score, relevance, answer = semantic_asag(stud_answer, ref, False)
     score_jac, relevance_jac, distance_jac, rel_dist_jac = get_jaccard_sim(stud_answer, ref)
-    tot_rel = ((relevance * asag_semantic_weight) + (relevance_jac * asag_jaccard_weight)) / (asag_jaccard_weight + asag_semantic_weight)
-    tot_score = (((score * asag_semantic_weight) + (score_jac * asag_jaccard_weight))) / (asag_jaccard_weight + asag_semantic_weight)
+    tot_rel = (((relevance * asag_semantic_weight) +
+               (sentence_scoring * asag_sentence_weight) +
+               (relevance_jac * asag_jaccard_weight)) /
+               (asag_jaccard_weight + asag_semantic_weight + asag_sentence_weight))
+    tot_score = ((((score * asag_semantic_weight)  + (score_jac * asag_jaccard_weight))) /
+                 (asag_jaccard_weight + asag_semantic_weight))
 
     return score, relevance, tot_score, tot_rel, score_jac, relevance_jac,distance_jac, rel_dist_jac, rule_grad, tdiff_scoring
 
@@ -50,8 +62,10 @@ def calculate_points_per_item(tot_score, tot_rel, rule_grad, tdiff_scoring, poin
     config = ConfigReader.myinstance(get_rag_config_path(), conf_section)
     asag_base_score_limit = config.read_val_float('asag_base_score_limit')
     asag_keywords_limit = config.read_val_float('asag_keywords_limit')
-    if rule_grad >= asag_keywords_limit and tdiff_scoring >= asag_base_score_limit and tot_score <= 0.19:
-        calc_points = tot_rel * points
+    asag_total_score_limit= config.read_val_float('asag_total_score_limit')
+    if (rule_grad >= asag_keywords_limit and tdiff_scoring >= asag_base_score_limit
+            and tot_score <= asag_total_score_limit):
+        calc_points = float(tot_rel) * float(points)
     else:
         calc_points = 0.0
     return round(calc_points, 1)
@@ -64,10 +78,11 @@ def score_answers(questions, answers, keyword_array, points_array, tot_points,st
         else:
             stud_answer = input(f"Answer the question: {questions[index]}")
         print(f'stud_answer: {stud_answer}')
+        question = questions[index]
         answer = answers[index]
         keywords = keyword_array[index]
         points = points_array[index]
-        score, relevance, tot_score, tot_rel, score_jac, relevance_jac,dist_jac, rel_dist_jac, rule_grad, tdiff_scoring = do_score(stud_answer, answer, keywords)
+        score, relevance, tot_score, tot_rel, score_jac, relevance_jac,dist_jac, rel_dist_jac, rule_grad, tdiff_scoring = do_score(question,stud_answer, answer, keywords)
         print(f"rule grad: {rule_grad}")
         print(f"ASAG score: {tdiff_scoring}")
         print(f"GPT score: {score}, relevance: {relevance}")
@@ -96,22 +111,58 @@ def read_exam_work(path, fname):
     return answer_array
 
 
+def record_answers(questions):
+    for index in range(len(questions)):
+        answer = input(f"Answer the question: {questions[index]}")
+        work_file.write(answer)
+        if answer != 'exit':
+            work_file.write('#')
+
+
 if __name__ == '__main__':
+    record = False
+    work_file =None
+    my_name = input("Please enter your name:")
+    discipline = input("Please enter your discipline:")
+    record_q = input("Do you want to record the session as classwork (y/n): ")
+
     conf_section = input("Configuration / discipline:")
-    exam_work_path = f'/Users/hglabplhak/examinations/{conf_section}/works/'
+    exam_path = os.path.join(Path.home(), 'examinations', conf_section)
+    record_hash_file_path = "hash.txt"
+    record_file_path = "file.txt"
+    if record_q.lower() == 'y':
+        record = True
+        file_name = my_name + f"_{discipline}_" + actual_classw_ts()
+        hash_file_name = file_name + ".hash"
+        record_base_path = os.path.join(exam_path,'works')
+        record_file_path = os.path.join(record_base_path, file_name)
+        record_hash_file_path = os.path.join(record_base_path, hash_file_name)
+        work_file =open(record_file_path,'w')
     set_config(conf_section)
     mode = input("Mode interactive/batch:")
     if mode == 'batch':
         fname = input('Class work:')
+        exam_work_path = os.path.join(exam_path, 'works')
         answer_array = read_exam_work(exam_work_path, fname)
     else:
         answer_array = []
-    questions, answers, keywords, points_array, tot_points = read_exam_solution(
-        f'/Users/hglabplhak/examinations/{conf_section}/short_test.exam')
-    print(questions)
-    print(answers)
-    print (keywords)
-    print(points_array)
-    print(tot_points)
-    percent =  score_answers(questions, answers, keywords, points_array, tot_points, answer_array, mode)
-    print(f"Quit with {percent} %")
+    filename = input("Test exam for deal with :")
+    filename = filename.strip() + '.exam'
+    abs_path = os.path.join(exam_path, filename)
+    print(f"Examination solution file. {abs_path}")
+    questions, answers, keywords, points_array, tot_points = read_exam_solution(abs_path)
+    if work_file  and record:
+        record_answers(questions)
+    else:
+        print(questions)
+        print(answers)
+        print (keywords)
+        print(points_array)
+        print(tot_points)
+        percent =  score_answers(questions, answers, keywords,
+                             points_array, tot_points,
+                             answer_array, mode)
+        print(f"Quit with {percent} %")
+    if work_file and record:
+        work_file.close()
+        calculate_and_write_hash_to_file(record_file_path, record_hash_file_path)
